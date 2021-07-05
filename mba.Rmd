@@ -1,0 +1,370 @@
+---
+title: "Market Basket Analysis (Association Rules Mining)"
+author: "Gerald Bryan"
+date: "11/11/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: 
+      collapsed: false
+      smooth_scroll: true
+    number_sections: true
+    theme: flatly
+    highlight: tango
+    df_print: paged
+---
+
+# Introduction
+<br>
+
+## Market Basket Analysis
+
+**Market Basket Anlysis** (MBA) is a data mining technique used by retailers to increase sales by better understanding customer purchasing patterns. When we go to the machine learning terms **Market Basket Analysis** can be categorized as unsupervised learning technique that help to analyzing transactional data. This technique is usually used to analyzing the purchasing pattern of costumers. In example
+
+{T-shirt,Trousers}⇒{Jacket}
+
+The rules above can be states as if someone bought T-shirt and Trousers, then Jacket is also likely to be purchased. From the example above, it is seems that MBA is a very important analysis technique in the retail and sales area, but surprisingly MBA or Association Rules Mining also can be a powerful tools that can be used in many scenario.
+
+In this Example I will try to use MBA as a technique to find the association of The consumption of alcohol by students with a ["student alcoholic consumptions"](https://www.kaggle.com/uciml/student-alcohol-consumption) datasets from kaggle. 
+
+## Apriori Algorithm
+
+When we talk about Market Basket Analysis or Association Rules Mining, there is one algorithm that comes to mind which is **Apriori Algorithm**
+
+From the wikipedia it is said that:
+
+>The frequent item sets determined by Apriori can be used to determine association rules which highlight general trends in the database: this has applications in domains such as market basket analysis.
+
+For more information about apriori algorithm you can clik [here](https://www.geeksforgeeks.org/apriori-algorithm/) or [here](https://en.wikipedia.org/wiki/Apriori_algorithm)
+
+```{r, echo=FALSE}
+Transaction <- c("T1","T2","T3","T4")
+Items <- c("{Tooth brush, Tooth paste, Mouth wash}", "{Jam , Peanut butter, Bread}", "{cereal, milk}","{T-shirt, Trousers}")
+
+a <- data.frame(Transaction,Items)
+a
+```
+
+In the table above, we can see there is four transactions from a supermarket. The item sets are
+
+
+$$
+\begin{align}
+    I = {Tooth brush, Tooth paste, Mouth wash, Jam , Peanut butter, Bread, cereal, milk, T-shirt, Trousers}
+\end{align}
+$$
+
+and the transactions sets,
+
+$$
+\begin{align}
+    T = {T1, T2, T3, T4}
+\end{align}
+$$
+
+For example,
+
+$$
+\begin{align}
+    T1 = {Tooth brush, Tooth paste, Mouth wash}.
+\end{align}
+$$
+
+Then the association rules is defined as: 
+
+$$
+\begin{align}
+    X⇒Y, where X⊂I, Y⊂I and X∩Y=0
+\end{align}
+$$
+and from the transaction 1 (T1), it can be implies as 
+
+$$
+\begin{align}
+    {Tooth brush, Tooth paste} ⇒{Mouth wash}
+\end{align}
+$$
+
+# Library Packages
+
+```{r, message=FALSE, warning=FALSE}
+library(arules) #For Mining Association Rules
+library(arulesViz) # For Visualizing Association Rules
+library(tidyr) # For Tidying the Data
+library(tidyverse) #For Data Manipulation and Visualization (Consist of Multiple R Package)
+```
+
+In this project we will use 4 library
+
+- arules : Use for Mining Association Rules
+
+- arulesViz : Use for the visualization of Association Rules
+
+- tidyr : Use for tidying the data
+
+- tidyverse : Use for data manipulation and visualization (Consist of Multiple R Package)
+
+# Data
+
+```{r}
+data <- read.csv("data/student-por.csv")
+head(data)
+```
+
+```{r}
+str(data)
+```
+
+The school alcoholic consumptions datasets consist of 649 observations and 33 variables originally. When we want to use this data with market basket analysis techniques we must transform all data types into factor. Thus in the next section, I try to transform all variable into factor type and also merge some variables.
+
+# Feature Engineering and Data preparation
+
+If you wonder what feature engineering is, the simplest meaning is  the process of using domain knowledge to extract features from raw data via data mining techniques. These features can be used to improve the performance of machine learning algorithms. 
+
+For more information you can click [here](https://en.wikipedia.org/wiki/Feature_engineering)
+
+```{r}
+#Alcoholic consumption data Transformation
+data$alc_cons <- (data$Dalc+data$Walc)/2
+
+data$alc_cons <- ifelse(data$alc_cons>=2.5, "High", "Low")
+```
+
+```{r}
+#Parents Education Condition
+data$parents_ed <- (data$Fedu+data$Medu)/2
+
+data$parents_ed <- ifelse(data$parents_ed>2, "High Education", "Low Education")
+```
+
+```{r}
+#Grade Transformation
+data$grade_imp <- ifelse(data$G1 < data$G3, "Improve", "Not Improve")
+
+data$grade_ave <- (data$G1+data$G2+data$G3)/3
+
+data$grade <- ifelse(data$grade_ave >= 12, "Above Average", "Below Average")
+```
+
+```{r}
+data$age <- ifelse(data$age >= 19 , "19-22", "15-18")
+
+data$personality <- ifelse(data$freetime>=3 & data$goout>=3, "Extrovert","Introvert") 
+
+data$famsize <- ifelse(data$famsize=="GT3", "Big", "Small")
+
+data$like_school <- ifelse(data$absences>=3 & data$failures>2, "Yes","No")
+
+data$ed_support <- ifelse(data$famsup == "yes" | data$schoolsup=="yes", "Yes", "No") 
+
+data$failures <- ifelse(data$failures==0, "No","Yes")
+
+data$traveltime <- ifelse(data$traveltime >2, "Long", "Short")
+
+data$famrel <- ifelse(data$famrel >= 3, "Good", "Bad")
+
+data$health <- ifelse(data$health >= 3, "Good", "Bad")
+
+data$address <- ifelse(data$address=="U", "Urban", "Rural") 
+
+data$parents_guidance <- ifelse(data$Mjob =="at_home" | data$Fjob=="at_home", "Yes", "No")
+
+data$Pstatus <- ifelse(data$Pstatus=="A", "Apart", "Together") 
+
+data$studytime <- ifelse(data$studytime >=3, "Long", "Short")
+
+data$freetime <- ifelse(data$freetime >=3, "Many", "Few") 
+```
+
+```{r}
+data <- data %>%
+  select(-c(goout,absences,reason,Dalc,Walc,Fjob, Mjob,guardian,G1,G2,G3,grade_ave,schoolsup,famsup,Medu,Fedu))
+```
+
+```{r}
+data <- data %>%
+  mutate_if(is.character,as.factor)
+
+data <- data %>%
+  select_if(is.factor)
+```
+
+```{r}
+str(data)
+```
+
+Ater doing the feature engineering steps where I try to making a new features that can improve the model, removing some unecessary features or variables, and the most important steps is make all the variables to factor types, we can get the "clean" data that will be used to perform association rules/ market basket analysis with 649 observations and 26 variables.
+
+And here is the definition about the variable
+
+- **school : The school students attend (MS : Mousinho da Silveira, GP : Gabriel Pereira)**
+
+- **sex : The gender of students (M : Male, F: Female)**
+
+- **age : Age of the respondent (15-18 and 19-22)**
+
+- **address : The living area of students (Rural, Urban)**
+
+- **famsize : The Family size of students (big = 3 and above person, small = below 3 person)**
+
+- **Pstatus : Parents status (together, apart)**
+
+- **traveltime : How is the respondent travel time to school (Long (30 minutes and longer), Short (below 30 minutes))**
+
+- **studytime : Time that are consumed by student for study**
+
+- **failures : If respondent Have ever fail in class (Yes, No)**
+
+- **paid : If students paid for extra subject of Math or Portuguese (Yes, No)**
+
+- **activities : If students doing extra-curricular activities (Yes, No)**
+
+- **nursery : If students attend nursery school (Yes, No)**
+
+- **higher : If students wants to take higher education (Yes, No)**
+
+- **internet : If students have internet access at home (Yes, No)**
+
+- **romanctic : If students has a romantic relationship (Yes, No)**
+
+- **famrel : The students family relations (Good, Bad)**
+
+- **freetime : Availability free time of the students**
+
+- **health : The students Health Conditions (Good, Bad)**
+
+- **alc_cons : The students alcohol consumption rate (High, Low)**
+
+- **parents_ed : The student's parents education (High, Low)**
+
+- **grade_imp : If the students G1 < G3 it is improve (Improve, Not improve)**
+
+- **grade : If  each students 3 grades average is higher than the total score average it is above average (Above average, below average)**
+
+- **personality : Personality of the students (Introvert and Extrovert), based on rate of freetime and going out**
+
+- **like_school : If responednts Like school or not (Yes, No), based on absence and failures**
+
+- **parents_guidance : if either father or mother of the students work at home (Yes, No)**
+
+- **ed_support : If the students have educational support either from parents or school (Yes, No)**
+
+If you wonder what is the "Transaction" and what is the "Items" because you can't find any variables name as "Transaction" and "Items". Don't worry, in this datasets we used "alc_cons" as our "Transactions" variable and the rest of variables as our "Items" variables.
+
+# The Modelling Process
+
+In This part we will try to make the model from the data, we will divided it into two parts, whereas searching for which factor leads to high consumption of alcohol and which factor leads to low consumption of alcohol.
+
+Before we go to the modelling process, it is better if yoou know these terms first:
+
+**1. Support**
+
+**Support** is  the percentage of transactions that contain all of the items in an itemset example *T1 = {Item A, Item B}* . The higher the support the more frequently the itemset occurs. Rules with a high support are preferred since they are likely to be applicable to a large number of future transactions.
+
+and how to calculate **support**,
+
+$$
+\begin{align}
+    Support(Item A\Rightarrow ItemB) &=Pr(ItemA,ItemB)&=\dfrac{count(ItemA,ItemB)}{N}
+\end{align}
+$$
+where N represent the total number of transactions
+
+**2. Confidence**
+
+**Confidence** the probability that a transaction that contains the items on the left hand side of the rule also contains the item on the right hand side. The higher the confidence, the greater chance that the item on the right hand side will be purchased.
+
+and this is how to calculate **confidence**,
+
+$$
+\begin{align}
+    Confidence(ItemA\Rightarrow ItemB) &=\dfrac{support(ItemA,ItemB)}{support(ItemA)}
+\end{align}
+$$
+
+**3. Lift**
+
+**Lift** is the support divided by the product of the probabilities of the items on the left and right hand side occurring as if there was no association between them.
+
+and this is how to calculate **lift**,
+
+$$
+\begin{align}
+    Lift(A\Rightarrow B) &=\dfrac{support(A,B)}{Pr(A)Pr(B)}&=\dfrac{Pr(A,B)}{Pr(A)Pr(B)}&=\dfrac{Pr(B|A)}{Pr(B)} \end{align}
+$$
+
+These are the implications of **lift**
+
+- When lift is 0 - 1, there is no relationship at all. 
+
+- When lift is more than 1, the transaction of the item is more likely to happen
+
+- When lift is lower than 0, the transaction of the item is less likely to happen
+
+Now let' do the modelling and try to get the take away  from this data sets.
+
+**5.2.1 High Alcohol Consumptions**
+
+```{r,warning= FALSE}
+mba_high <- apriori(data, parameter = list(sup = 0.01, conf = 0.5, target="rules",minlen=2,maxlen=3), appearance = list(rhs= "alc_cons=High", default = "lhs"))
+```
+
+```{r}
+inspect(head(sort(mba_high, by="confidence"),10))
+```
+
+From the first rules we can implies, Male students who do not want to take higher education is 3.54%(support) from all the datasets. These category of students likely to have a high consumption of alcohol by 67,64%(confidence). If you are a male student and do not want to take higher education you are 2.27(lift) times more likely to have a high consumption of alcohol.
+
+I also try to visualize the result above,
+
+```{r, warning= FALSE, message=FALSE}
+plot(mba_high)
+```
+
+```{r}
+plot(mba_high[1:10], method = "graph")
+```
+
+```{r}
+plot(mba_high[1:10], method="graph", control=list(layout=igraph::in_circle()))
+```
+
+**5.2.2 Low Alcohol Consumptions**
+
+```{r}
+mba_low <- apriori(data, parameter = list(sup = 0.5, conf = 0.7, target="rules",minlen=2,maxlen=3), appearance = list(rhs= "alc_cons=Low", default = "lhs"))
+```
+
+```{r}
+summary(mba_low)
+```
+
+```{r, warning=FALSE, message=FALSE}
+plot(mba_low)
+```
+
+```{r}
+inspect(head(sort(mba_low, by="confidence"),10))
+```
+
+From the first rules we can implies, students who do not fail in any class and attend nursery school  is 50,69%(support) from all the datasets. These category of students likely to have a low consumption of alcohol by 73,93%(confidence). If you are a student who do not fail in any class and attend nursery school you are 1.05(lift) times more likely to have a low consumption of alcohol.
+
+And, the plot below is the visualization of the low consumption
+
+```{r}
+plot(mba_low[1:10], method="graph")
+```
+
+```{r}
+plot(mba_low[1:10], method="grouped")
+```
+
+```{r}
+plot(head(sort(mba_low,by="lift"),10),method="graph")
+```
+
+# Conclusion
+
+Market basket analysis is a very useful techniques to analyze data. Traditionally it only use for a transaction data but guess what it is not. You can do this technique using all type of datasets but do not forget to change it to a factor data type first. Hopefully this will help you doing your own MBA analysis
+
+**Thank you :)**
